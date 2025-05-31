@@ -1,5 +1,5 @@
+import 'package:cattle_monitoring/data/models/cow_model.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import '../../data/models/cow_model.dart';
 
 part 'animal_state.freezed.dart';
 

@@ -1,9 +1,13 @@
 import 'package:cattle_monitoring/components/cards/cow_card.dart';
+import 'package:cattle_monitoring/components/map.dart';
 import 'package:cattle_monitoring/data/models/cow_model.dart';
 import 'package:cattle_monitoring/features/animals/animal_cubit.dart';
 import 'package:cattle_monitoring/features/animals/animal_state.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class AnimalPage extends StatelessWidget {
   const AnimalPage({super.key});
@@ -135,25 +139,87 @@ class AnimalPage extends StatelessWidget {
           return state.when(
             initial: () => const Center(child: Text('Initializing...')),
             loading: () => const Center(child: CircularProgressIndicator()),
-            loaded: (animals) => RefreshIndicator(
-              onRefresh: () async {
-                cubit.loadAnimals();
-              },
-              child: animals.isEmpty
-                  ? const ListTile(title: Text("No cows found."))
-                  : ListView.builder(
-                      itemCount: animals.length,
-                      itemBuilder: (context, index) {
-                        final cow = animals[index];
-                        return CowCard(
-                          cow: cow,
-                          onEdit: () => _showEditCowDialog(context, cow),
-                          onDelete: () => cubit.deleteAnimal(cow.id!),
-                          onDetail: () => _navigateToDetail(context, cow),
-                        );
-                      },
+            loaded: (animals) {
+              // Parse cow locations into LatLng list
+              final positions = animals
+                  .map((cow) {
+                    final parts = cow.location.split(',');
+                    if (parts.length >= 2) {
+                      final lat = double.tryParse(parts[0].trim());
+                      final lon = double.tryParse(parts[1].trim());
+                      if (lat != null && lon != null) {
+                        return LatLng(lat, lon);
+                      }
+                    }
+                    return null;
+                  })
+                  .whereType<LatLng>()
+                  .toList();
+
+              // Calculate centroid or fallback
+              LatLng mapCenter;
+              if (positions.isNotEmpty) {
+                final avgLat = positions.map((p) => p.latitude).reduce((a, b) => a + b) / positions.length;
+                final avgLng = positions.map((p) => p.longitude).reduce((a, b) => a + b) / positions.length;
+                mapCenter = LatLng(avgLat, avgLng);
+              } else {
+                // Default fallback (Terceira Azores approx center)
+                mapCenter = LatLng(38.715, -27.232);
+              }
+
+              // Create markers for cows
+              final markers = animals.map((cow) {
+                return Marker(
+                  point: LatLng(
+                    cow.latitude ?? 38.715, // Fallback to default if null
+                    cow.longitude ?? -27.232, // Fallback to default if null
+                  ),
+                  width: 5,
+                  height: 5,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.red, width: 1),
                     ),
-            ),
+                  ),
+                );
+              }).toList();
+
+              return RefreshIndicator(
+                onRefresh: () async {
+                  await cubit.loadAnimals();
+                },
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 200, // fixed map height
+                      child: MapWidget(
+                        center: mapCenter,
+                        zoom: 13.0,
+                        markers: markers,
+                      ),
+                    ),
+                    Expanded(
+                      child: animals.isEmpty
+                          ? const ListTile(title: Text("No cows found."))
+                          : ListView.builder(
+                              itemCount: animals.length,
+                              itemBuilder: (context, index) {
+                                final cow = animals[index];
+                                return CowCard(
+                                  cow: cow,
+                                  onEdit: () => _showEditCowDialog(context, cow),
+                                  onDelete: () => cubit.deleteAnimal(cow.id!),
+                                  onDetail: () => _navigateToDetail(context, cow),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              );
+            },
             error: (message) => Center(child: Text('Error: $message')),
           );
         },

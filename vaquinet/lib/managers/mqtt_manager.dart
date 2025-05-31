@@ -57,7 +57,7 @@ class MQTTManager {
     } catch (e) {
       print('MQTT client connection failed: $e');
       connectionState = MqttConnectionState.error;
-      _client.disconnect();
+      //_client.disconnect();
       return;
     }
 

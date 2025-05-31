@@ -10,12 +10,21 @@ class AnimalRepository {
     final request = http.Request('GET', Uri.parse('$_baseUrl/cows'));
     final response = await request.send();
 
-    if (response.statusCode == 200) {
-      final body = await response.stream.bytesToString();
-      final List<dynamic> data = json.decode(body);
-      return data.map((e) => CowModel.fromJson(e)).toList();
-    } else {
-      throw Exception('Failed to load cows: ${response.statusCode}');
+    try {
+      if (response.statusCode == 200) {
+        final body = await response.stream.bytesToString();
+        final decoded = json.decode(body);
+
+        // 💡 The actual data is in the "data" field
+        final List<dynamic> cowList = decoded;
+
+        return cowList.map((e) => CowModel.fromJson(e)).toList();
+      } else {
+        throw Exception('Failed to load cows: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error parsing cows: $e');
+      rethrow;
     }
   }
 
